@@ -35,7 +35,7 @@ gives agents written instructions only; this one adds enforcement around them.
 ```bash
 git clone https://github.com/huigangz/second-brain.git
 cd second-brain
-python -m unittest discover -s tests          # 150 tests
+python -m unittest discover -s tests          # 152 tests
 
 python tools/second_brain.py install ../my-vault
 cd ../my-vault

@@ -1807,6 +1807,38 @@ class TestKit(unittest.TestCase):
         self.assertEqual(first.read_text(encoding="utf-8"), "re-edited after the upgrade wrote it\n")
         self.assertIn(written[0], cm.exception.message)
 
+    def test_edit_right_after_the_last_write_is_never_recorded_as_the_kit_version(self):
+        """gate 14 P1: kit.json records what the kit wrote, so an edit made right after the (only) write is a local
+        change: reported now, CONFLICT at the next upgrade, never overwritten without --force."""
+        from unittest import mock
+        sb.install_vault(self.vault, self.project)
+        (self.project / "vault-template/AGENTS.md").write_text("# upstream v2\n", encoding="utf-8")
+        original_write = sb._atomic_write_bytes
+
+        def edit_right_after(path, data):
+            original_write(path, data)
+            if Path(path).name == "AGENTS.md":
+                Path(path).write_text("human edit after the final write\n", encoding="utf-8")
+
+        with mock.patch.object(sb, "_atomic_write_bytes", edit_right_after):
+            report = sb.upgrade_vault(self.vault, project=self.project)
+        self.assertEqual(report[0], "UPDATE   AGENTS.md")
+        self.assertTrue(any(l.startswith("EDITED   AGENTS.md") for l in report), report)
+        record = json.loads((self.vault / "state/kit.json").read_text(encoding="utf-8"))
+        shipped = (self.project / "vault-template/AGENTS.md").read_bytes()
+        self.assertEqual(record["files"]["AGENTS.md"], "sha256:" + sb.sha256_bytes(shipped))  # not the human edit
+        (self.project / "vault-template/AGENTS.md").write_text("# upstream v3\n", encoding="utf-8")
+        with self.assertRaises(sb.PlanError) as cm:
+            sb.upgrade_vault(self.vault, project=self.project)
+        self.assertEqual(cm.exception.code, "KIT_CONFLICT")
+        self.assertEqual((self.vault / "AGENTS.md").read_text(encoding="utf-8"), "human edit after the final write\n")
+
+    def test_kit_record_names_the_project_it_came_from(self):
+        """gate 14 P3."""
+        sb.install_vault(self.vault, self.project)
+        record = json.loads((self.vault / "state/kit.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["project"], str(self.project))
+
     def test_must_run_from_the_project(self):
         sb.install_vault(self.vault, self.project)
         with self.assertRaises(sb.PlanError):

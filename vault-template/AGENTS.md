@@ -45,26 +45,27 @@ Before writing anything, put each piece of information from a source into one of
 | **Decision** | Someone with the authority to decide states it explicitly ("let's go with B", "That's the decision"), or a proposal is explicitly accepted by the relevant people present | decision page (`active`) + source page |
 | **Proposed decision** | A conclusion stated explicitly in a document (ADR, design doc, proposal) that does not say who accepted it | decision page (`proposed`) + source page |
 | **Confirmed fact** | Direct evidence: logs, tests, reproductions, configuration, code, or the current state as described by the people involved | any page |
-| **Documented claim** | A description of the current state (code structure, process, implementation details) in a **document** (not something said in a meeting or session), with no independent evidence in the vault | any page, but written as "据 [[source-id\|Source title]]：…" (the documented-claim form, §6) |
+| **Documented claim** | A description of the current state (code structure, process, implementation details) in a **document** (not something said in a meeting or session), with no independent evidence in the vault | any page, but written in the documented-claim form (§6) |
 | **Open question / Discussion** | Raised but not concluded; "maybe", "later", "needs evaluation" | source page only (Open questions); the Open follow-ups of the related decision page |
 | **Rejected alternative** | An option that was proposed and then explicitly rejected | source page + "Alternatives rejected" of the related decision page |
 | **Disproven hypothesis** | A hypothesis raised while investigating and later ruled out by evidence | source page "Ruled out" **only** |
-| **Unverified claim** | A passing guess, an estimate, "should be", "I would expect" | source page; it may also go on durable pages, but **must** start with the unverified marker `未验证：` (§6), keep the original hedging and name its source |
+| **Unverified claim** | A passing guess, an estimate, "should be", "I would expect" | source page; it may also go on durable pages, but **must** start with the unverified marker (§6), keep the original hedging and name its source |
 | **Action item** | Something someone committed to do | source page only (Action items) |
 
 Hard rules:
 
-1. **Discussion is not a decision.** Content with "I think / maybe / probably / 可能 / 建议" that was not explicitly
-   accepted cannot become a decision page.
+1. **Discussion is not a decision.** Content hedged with "I think / maybe / probably" (or the same hedges in the
+   source's language, such as "可能 / 建议") that was not explicitly accepted cannot become a decision page.
 2. **A failed hypothesis is not knowledge.** Ruled-out content must not appear in the body of an entity / concept /
    decision page, except in the Alternatives rejected section of a decision page.
-   Unverified content on a durable page without the `未验证：` marker counts as a violation.
-   Saying who said it ("据 Speaker 3") does **not** replace `未验证：`, and does not allow dropping the original
-   hedging; the same statement must carry the same degree of certainty on every page.
+   Unverified content on a durable page without the unverified marker (§6) counts as a violation.
+   Naming who said it (for example "according to Speaker 3") does **not** replace the unverified marker, and does
+   not allow dropping the original hedging; the same statement must carry the same degree of certainty on every
+   page.
 3. **The final state wins.** When a statement is corrected later in the same source (a corrected number, a
    corrected status), only the corrected version goes into durable pages.
 4. **Date status snapshots.** Facts that change over time, such as "currently in progress" or "not yet in
-   production", are written as "截至 <source_date>：…" (the as-of form, §6).
+   production", are written in the as-of form (§6), dated with the source_date.
 5. **Keep the hedging.** If the source says "not proven / opaque / would expect", the wiki must keep the same
    degree of uncertainty.
 6. **An action item is not a decision**, and neither is an intention announced by the owner (unless the details
@@ -105,8 +106,8 @@ History. A proposed conclusion must never be cited as an active decision.
    Every part that "still holds" must appear in some active decision.
 4. **Temporal check**: first compare the source_date of the two sources. If either has date_confidence low, or the
    order cannot be determined:
-   **do not change the old page's status.** Add `> ⚠ TEMPORAL UNCERTAINTY: 可能被 [[x|X]] 推翻，待确认` (the
-   temporal banner, §6) to both pages, and ask the user in your final report.
+   **do not change the old page's status.** Add the temporal banner (§6), naming the other page, to both pages,
+   and ask the user in your final report.
    The tool rejects such a supersession without `temporal_override`; add `temporal_override` only after the user
    has explicitly confirmed the order.
 5. An earlier source must never overturn a newer decision.
@@ -165,16 +166,17 @@ Body sections, keeping only those with content: `## Summary`, `## Decisions`, `#
   maintained by the tool; you express them only through operation fields (see PLAN-SCHEMA.md).
 
 **Wiki language.** Write the wiki body in **Chinese**; keep proper nouns, code identifiers, configuration values
-and verbatim quotes in their original language. These fixed forms are written in the wiki language:
+and verbatim quotes in their original language. The fixed forms below are the only place where the wiki's
+wording is prescribed; every other section refers to them by name. Copy them exactly as written here:
 
-| Form | In this vault (Chinese) | For an English wiki, use instead |
-|---|---|---|
-| unverified marker (§2) | `未验证：` | `Unverified: ` |
-| documented claim (§2) | `据 [[source-id\|Source title]]：…` | `According to [[source-id\|Source title]]: …` |
-| as-of snapshot (§2 rule 4) | `截至 <source_date>：…` | `As of <source_date>: …` |
-| temporal banner (§3) | `> ⚠ TEMPORAL UNCERTAINTY: 可能被 [[x\|X]] 推翻，待确认` | `> ⚠ TEMPORAL UNCERTAINTY: may be superseded by [[x\|X]], pending confirmation` |
+- **unverified marker** (§2): `未验证：`
+- **documented claim** (§2): `据 [[source-id|Source title]]：…`
+- **as-of form** (§2 rule 4): `截至 <source_date>：…`
+- **temporal banner** (§3): `> ⚠ TEMPORAL UNCERTAINTY: 可能被 [[page_id|Title]] 推翻，待确认`
 
-To run a wiki in another language, change this section (the language and the table) and nothing else.
+To run the wiki in another language, change the language above and these four forms, and nothing else. For
+English: `Unverified: `, `According to [[source-id|Source title]]: …`, `As of <source_date>: …`,
+`> ⚠ TEMPORAL UNCERTAINTY: may be superseded by [[page_id|Title]], pending confirmation`.
 
 ## 7. Forbidden
 

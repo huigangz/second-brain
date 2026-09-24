@@ -2697,27 +2697,34 @@ def kit_files(project: Path = PROJECT) -> dict[str, Path]:
     return files
 
 
-def _write_kit_record(target: Path, files: dict[str, Path], event: str) -> None:
-    record = {"schema": 1, "project": str(PROJECT), "updated_at": now_iso(),
-              "files": {rel: file_hash(target / rel) for rel in sorted(files)}}
+def _kit_payload(project: Path) -> dict[str, bytes]:
+    """Vault path -> the exact bytes the kit ships, read once: what is written and what is recorded come from
+    this one snapshot, never from re-reading the project or the vault afterwards."""
+    return {rel: src.read_bytes() for rel, src in kit_files(project).items()}
+
+
+def _write_kit_record(target: Path, kit: dict[str, bytes], project: Path, event: str) -> None:
+    """Record the hashes of what the kit wrote — not of the files as they are now: an edit made in the vault
+    right after a file was written must show up as a local change (CONFLICT) at the next upgrade."""
+    record = {"schema": 1, "project": str(project), "updated_at": now_iso(),
+              "files": {rel: "sha256:" + sha256_bytes(data) for rel, data in sorted(kit.items())}}
     _atomic_write(target / KIT_RECORD, json.dumps(record, ensure_ascii=False, indent=2) + "\n")
-    State(target).event(event, files=len(files))
+    State(target).event(event, files=len(kit))
 
 
 def install_vault(target: Path, project: Path = PROJECT) -> list[str]:
     """A new vault: the rule files and tools, then `init`. Never overwrites a different existing file."""
-    files = kit_files(project)
+    kit = _kit_payload(project)
     if State(target).managed:
         raise PlanError("SCHEMA", f"{target} is already a vault; use upgrade")
-    clash = [rel for rel, src in files.items() if (target / rel).exists()
-             and (target / rel).read_bytes() != src.read_bytes()]
+    clash = [rel for rel, data in kit.items() if (target / rel).exists() and (target / rel).read_bytes() != data]
     if clash:
         raise PlanError("SCHEMA", "install would overwrite existing files: " + ", ".join(clash))
-    for rel, src in files.items():
-        _atomic_write_bytes(target / rel, src.read_bytes())
+    for rel, data in kit.items():
+        _atomic_write_bytes(target / rel, data)
     init_vault(target)
-    _write_kit_record(target, files, "kit_installed")
-    return [f"installed {len(files)} files into {target}", "next: put sources into raw/ and run "
+    _write_kit_record(target, kit, project, "kit_installed")
+    return [f"installed {len(kit)} files into {target}", "next: put sources into raw/ and run "
             "`python tools/second_brain.py discover` there (see README.md)"]
 
 
@@ -2727,30 +2734,31 @@ def upgrade_vault(target: Path, dry_run: bool = False, force: bool = False, proj
     raw/, wiki/, state/ (except kit.json) and plans/ never are."""
     if not State(target).managed:
         raise PlanError("SCHEMA", f"{target} is not a vault; use install")
-    files = kit_files(project)
+    kit = _kit_payload(project)
     if dry_run:
-        actions = _kit_actions(target, files)
+        actions = _kit_actions(target, kit)
         return [f"{a:<9}{rel}" for a, rel, _ in actions] + (["(dry run: nothing written)"] if actions else []) \
             or ["up to date"]
     with Lock(target, "upgrade"):
-        actions = _kit_actions(target, files)  # scanned under the lock; `seen` = each target's hash as scanned
+        actions = _kit_actions(target, kit)  # scanned under the lock; `seen` = each target's hash as scanned
         report = [f"{a:<9}{rel}" for a, rel, _ in actions] or ["up to date"]
         conflicts = [rel for a, rel, _ in actions if a == "CONFLICT"]
         if conflicts and not force:
             raise PlanError("KIT_CONFLICT", "changed in the vault since the last install/upgrade (keep your change "
                             "by moving it into the project, or overwrite with --force): " + ", ".join(conflicts))
         # a changed file the kit no longer ships is left in place, even with --force
-        todo = [(a, rel, seen) for a, rel, seen in actions if a == "REMOVE" or rel in files]
+        todo = [(a, rel, seen) for a, rel, seen in actions if a == "REMOVE" or rel in kit]
         now = lambda rel: file_hash(target / rel) if (target / rel).exists() else None
+        wrote = lambda a, rel: None if a == "REMOVE" else "sha256:" + sha256_bytes(kit[rel])
         before = {rel: (target / rel).read_bytes() if (target / rel).exists() else None for _, rel, _ in todo}
-        written: list[str] = []
+        written: list[tuple[str, str]] = []  # (action, vault path)
 
         def undo(stale: str) -> None:
             """An edit arrived while upgrading: put back what this upgrade wrote, record nothing, refuse.
             A written file that has been edited again since is newer work: it is left alone and named."""
             kept = []
             for a, rel in reversed(written):
-                if now(rel) != (None if a == "REMOVE" else file_hash(files[rel])):
+                if now(rel) != wrote(a, rel):
                     kept.append(rel)
                 elif before[rel] is None:
                     (target / rel).unlink()
@@ -2767,22 +2775,26 @@ def upgrade_vault(target: Path, dry_run: bool = False, force: bool = False, proj
             if a == "REMOVE":
                 (target / rel).unlink()
             else:
-                _atomic_write_bytes(target / rel, files[rel].read_bytes())
+                _atomic_write_bytes(target / rel, kit[rel])
             written.append((a, rel))
-        _write_kit_record(target, files, "kit_upgraded")  # only after a complete upgrade
+        # read back: a file edited right after it was written is newer work — kept, and (because the record
+        # holds what the kit wrote, not what is on disk) reported as a CONFLICT by the next upgrade
+        report += [f"EDITED   {rel}  (changed in the vault right after the upgrade wrote it: kept as a local "
+                   "change)" for a, rel in written if now(rel) != wrote(a, rel)]
+        _write_kit_record(target, kit, project, "kit_upgraded")  # only after a complete upgrade
     return report
 
 
-def _kit_actions(target: Path, files: dict[str, Path]) -> list[tuple[str, str, str | None]]:
+def _kit_actions(target: Path, kit: dict[str, bytes]) -> list[tuple[str, str, str | None]]:
     """(action, vault path, the target's hash as scanned) for every kit file that differs in the vault:
     ADD (absent), UPDATE (unchanged since last recorded), REMOVE (dropped from the kit, unchanged), CONFLICT."""
     rec_path = target / KIT_RECORD
     recorded = json.loads(rec_path.read_text(encoding="utf-8"))["files"] if rec_path.exists() else {}
     actions: list[tuple[str, str, str | None]] = []
-    for rel, src in files.items():
+    for rel, data in kit.items():
         dest = target / rel
         cur = file_hash(dest) if dest.exists() else None
-        if cur == file_hash(src):
+        if cur == "sha256:" + sha256_bytes(data):
             continue
         if cur is None:
             actions.append(("ADD", rel, None))
@@ -2792,7 +2804,7 @@ def _kit_actions(target: Path, files: dict[str, Path]) -> list[tuple[str, str, s
             actions.append(("CONFLICT", rel, cur))
     for rel, h in recorded.items():
         dest = target / rel
-        if rel not in files and dest.exists():
+        if rel not in kit and dest.exists():
             cur = file_hash(dest)
             actions.append(("REMOVE" if cur == h else "CONFLICT", rel, cur))
     return actions

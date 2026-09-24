@@ -31,7 +31,7 @@ files, do not take them on along the way.
    `validate-plan` until it prints `OK`, and `render-plan` to check the diff.
 9. **Self-check (go through each durable page changed by this plan against the rendered diff):**
    - no ruled-out hypotheses;
-   - every piece of unverified content starts with the unverified marker (`未验证：`, AGENTS.md §6);
+   - every piece of unverified content starts with the unverified marker (AGENTS.md §6);
    - corrected numbers or statuses appear only in their final version;
    - no proposed conclusion is written as an active decision;
    - no superseded page still holds content that is still valid in its body (check each component of the old

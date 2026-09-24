@@ -1,4 +1,5 @@
-"""Stage 1 tests (spec/stage1-design.md), organised by the main spec §47 test matrix."""
+"""Stage 1 tests: managed vaults (registries, transactions, discover, maintain, install/upgrade).
+§ numbers cite the internal design notes (not published); "review N" the release-gate review round."""
 import json
 import os
 import shutil
@@ -1737,6 +1738,74 @@ class TestKit(unittest.TestCase):
         self.assertNotEqual((self.vault / "AGENTS.md").read_text(encoding="utf-8"), "# new rules\n")  # all or nothing
         sb.upgrade_vault(self.vault, force=True, project=self.project)
         self.assertEqual((self.vault / "INGEST.md").read_text(encoding="utf-8"), "new upstream\n")
+
+    def test_edits_made_during_an_upgrade_are_never_overwritten(self):
+        """gate 13 P1: a target changed after the scan (UPDATE / REMOVE / ADD) or between two writes makes the
+        upgrade refuse; whatever it wrote is undone, kit.json and the event log are left as they were."""
+        from unittest import mock
+        sb.install_vault(self.vault, self.project)
+        (self.project / "vault-template/AGENTS.md").write_text("# new rules\n", encoding="utf-8")   # UPDATE
+        (self.project / "vault-template/INGEST.md").write_text("# new ingest\n", encoding="utf-8")  # UPDATE
+        (self.project / "vault-template/NEW.md").write_text("new\n", encoding="utf-8")             # ADD
+        (self.project / "vault-template/CLAUDE.md").unlink()                                      # REMOVE
+        original_scan, original_write = sb._kit_actions, sb._atomic_write_bytes
+        record, events = self.vault / "state/kit.json", self.vault / "state/events.jsonl"
+        keep = {p: p.read_bytes() for p in (self.vault / "AGENTS.md", self.vault / "INGEST.md",
+                                            self.vault / "CLAUDE.md", record, events)}
+        for target in ("AGENTS.md", "CLAUDE.md", "NEW.md"):
+            def scan_then_edit(vault, files, target=target):
+                assert (vault / "state/.lock").exists(), "the scan must run under the vault lock"
+                actions = original_scan(vault, files)
+                (vault / target).write_text("edited meanwhile\n", encoding="utf-8")
+                return actions
+
+            with mock.patch.object(sb, "_kit_actions", scan_then_edit):
+                with self.assertRaises(sb.PlanError, msg=target) as cm:
+                    sb.upgrade_vault(self.vault, project=self.project)
+            self.assertEqual(cm.exception.code, "KIT_CONFLICT", target)
+            self.assertEqual((self.vault / target).read_text(encoding="utf-8"), "edited meanwhile\n", target)
+            for p, data in keep.items():
+                if p.name != target:
+                    self.assertEqual(p.read_bytes(), data, (target, p.name))
+            if target == "NEW.md":
+                (self.vault / target).unlink()
+            else:
+                (self.vault / target).write_bytes(keep[self.vault / target])
+
+        written = []
+
+        def edit_between_writes(path, data):  # the first target is written, then a later one is edited
+            original_write(path, data)
+            written.append(Path(path).name)
+            if len(written) == 1:
+                (self.vault / "INGEST.md").write_text("edited meanwhile\n", encoding="utf-8")
+
+        with mock.patch.object(sb, "_atomic_write_bytes", edit_between_writes):
+            with self.assertRaises(sb.PlanError) as cm:
+                sb.upgrade_vault(self.vault, project=self.project)
+        self.assertEqual(cm.exception.code, "KIT_CONFLICT")
+        self.assertEqual((self.vault / "INGEST.md").read_text(encoding="utf-8"), "edited meanwhile\n")
+        self.assertEqual((self.vault / "AGENTS.md").read_bytes(), keep[self.vault / "AGENTS.md"])  # undone
+        self.assertEqual(record.read_bytes(), keep[record])
+        self.assertEqual(events.read_bytes(), keep[events])
+
+        # a file this upgrade already wrote, edited again before the undo: newer work, left alone and named
+        (self.vault / "INGEST.md").write_bytes(keep[self.vault / "INGEST.md"])
+        written.clear()
+
+        def re_edit_then_conflict(path, data):
+            original_write(path, data)
+            written.append(Path(path).name)
+            if len(written) == 1:
+                Path(path).write_text("re-edited after the upgrade wrote it\n", encoding="utf-8")
+                (self.vault / "INGEST.md").write_text("edited meanwhile\n", encoding="utf-8")
+
+        with mock.patch.object(sb, "_atomic_write_bytes", re_edit_then_conflict):
+            with self.assertRaises(sb.PlanError) as cm:
+                sb.upgrade_vault(self.vault, project=self.project)
+        first = self.vault / written[0]
+        self.assertEqual(first.read_text(encoding="utf-8"), "re-edited after the upgrade wrote it\n")
+        self.assertIn(written[0], cm.exception.message)
 
     def test_must_run_from_the_project(self):
         sb.install_vault(self.vault, self.project)

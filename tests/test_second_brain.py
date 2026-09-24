@@ -1,4 +1,5 @@
-"""Tests for tools/second_brain.py (spec/write-plan-schema-v1.md, incl. v1.1 §9). Run: python -m unittest discover tests"""
+"""Tests for tools/second_brain.py: the write-plan format of vault-template/PLAN-SCHEMA.md.
+Run: python -m unittest discover -s tests. (§ numbers cite the internal design notes, not published.)"""
 import json
 import os
 import sys

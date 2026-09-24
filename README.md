@@ -33,9 +33,9 @@ gives agents written instructions only; this one adds enforcement around them.
 ## Quick start
 
 ```bash
-git clone <this repo> second-brain
+git clone https://github.com/huigangz/second-brain.git
 cd second-brain
-python -m unittest discover -s tests          # 149 tests
+python -m unittest discover -s tests          # 150 tests
 
 python tools/second_brain.py install ../my-vault
 cd ../my-vault
@@ -65,9 +65,12 @@ python tools/second_brain.py upgrade ../my-vault --dry-run
 python tools/second_brain.py upgrade ../my-vault
 ```
 
-`upgrade` touches only the files `install` put there. `raw/`, `wiki/`, `state/` and `plans/` are never
-changed. A rule file you edited inside the vault is reported as `CONFLICT` and is not overwritten unless you
-pass `--force`. Changes you want to keep belong in this project's `vault-template/`.
+`upgrade` touches only the files `install` put there. `raw/`, `wiki/` and `plans/` are never changed, and
+in `state/` it only rewrites `state/kit.json` (the record of what it installed) and appends one event to
+`state/events.jsonl`. A rule file you edited inside the vault is reported as `CONFLICT` and is not
+overwritten unless you pass `--force`. If a file is edited while the upgrade runs, the upgrade stops, puts
+back what it had already written and records nothing. Changes you want to keep belong in this project's
+`vault-template/`.
 
 ## Agent support and its limits
 

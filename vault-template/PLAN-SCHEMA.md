@@ -1,16 +1,23 @@
-# Write Plan 速查（schema v1.1，`schema_version: 2`）
+# Write Plan quick reference (schema v1.1, `schema_version: 2`)
 
-这是给 Agent 用的速查表。工具的完整行为以 `tools/second_brain.py` 的校验为准：写完 plan 后一定要运行 `validate-plan`。
+A quick reference for the agent. The tool's full behaviour is defined by the checks in `tools/second_brain.py`:
+always run `validate-plan` after writing a plan.
 
-## 页面结构
+## Page structure
 
-- 文件：`wiki/<sources|entities|concepts|decisions|synthesis>/<page_id>.md`。`page_id` 是 kebab-case（`^[a-z0-9]+(-[a-z0-9]+)*$`），全 wiki 唯一，不带类型前缀。
-- 页面 = frontmatter（由工具维护）+ `# 标题`（H1）+ 正文。
-- `__preamble__` = H1 与第一个 `##` 之间的内容。
-- section = 从 `##`–`######` 开始，到下一个同级或更高级 heading 为止，**包含子 section**。
-- `section_path` 从 `##` 开始，按 heading 文本逐级写：`["Facts", "Detail"]` 表示 `## Facts` 下的 `### Detail`。
-- **链接**：一律写成 `[[page_id|显示标题]]` 或 `[[page_id#Heading|文字]]`。目标必须是已存在或本 plan 中创建的 page_id（否则 `BROKEN_LINK`）；代码块中的内容不检查。
-- 同一父节点下不能有同名 heading；heading 不能跳级（`##` 下面直接接 `####` 是非法的）。
+- File: `wiki/<sources|entities|concepts|decisions|synthesis>/<page_id>.md`. `page_id` is kebab-case
+  (`^[a-z0-9]+(-[a-z0-9]+)*$`, at most 80 characters), unique across the whole wiki, with no type prefix.
+- Page = frontmatter (maintained by the tool) + `# Title` (H1) + body.
+- `__preamble__` = the content between the H1 and the first `##`.
+- A section runs from a `##`–`######` heading to the next heading of the same or a higher level, **including its
+  subsections**.
+- `section_path` starts at `##` and names each heading's text level by level: `["Facts", "Detail"]` means the
+  `### Detail` under `## Facts`.
+- **Links**: always `[[page_id|display title]]` or `[[page_id#Heading|text]]`. The target must be an existing
+  page_id or one created in this plan (otherwise `BROKEN_LINK`); content in code blocks and code spans is not
+  checked.
+- No two headings with the same text under the same parent; headings cannot skip a level (a `####` directly under a
+  `##` is invalid).
 
 ## Plan
 
@@ -21,20 +28,26 @@
   "created_at": "2026-09-22T10:00:00+08:00",
   "source_ids": ["meeting-2026-09-10-widget-review"],
   "source_versions": { "meeting-2026-09-10-widget-review": "sha256:…" },
-  "summary": "一句话说明",
+  "summary": "one sentence",
   "operations": [ ... ]
 }
 ```
 
-- 文件放在 `plans/pending/<plan_id>.json`。`plan_id` 的格式为 `plan-YYYYMMDD-xxxx`（4–8 位小写字母或数字）。
-- `operation_id` 的格式为 `op-001`、`op-002`……，按数组顺序执行。
-- 每个 operation 都要写 `source_ids`（source 页自身的 `create_page` 除外），并且必须是 plan 级 `source_ids` 的子集。
-  每个 source_id 必须已经有 source 页，或者在同一个 plan 中创建。
-- 修改**已有**页面的每个 operation 都要带 `expected_hash`：值是生成 plan 时 `hash` 命令输出的 page hash。
-  同一页面的多个 operation 用**同一个**值。本 plan 中新建的页面不带 `expected_hash`。
-- 后面的 operation 基于前面 operation 执行后的页面状态寻址。
-- `source_versions`：plan 中每个 source_id 都要有，值取自 `source <id>` 输出的 `content_hash`。raw 在写 plan 之后变了，工具会报 `SOURCE_STALE`。
-- 任何修改已有页面的 operation 都可以带 `"human_override": {"confirmed_by_user": true, "note": "…"}`，**只在用户明确同意覆盖其在 Obsidian 中的修改后使用**。
+- The file goes to `plans/pending/<plan_id>.json`; the file name must be exactly the plan_id. `plan_id` has the form
+  `plan-YYYYMMDD-xxxx` (4–8 lowercase letters or digits).
+- `operation_id` has the form `op-001`, `op-002`, …; operations run in array order.
+- Every operation carries `source_ids` (except the `create_page` of a source page itself), and they must be a
+  subset of the plan-level `source_ids`.
+  Every source_id must already have a source page, or have one created earlier in the same plan.
+- Every operation that changes an **existing** page carries `expected_hash`: the page hash printed by the `hash`
+  command when the plan was written. All operations on the same page use the **same** value. Pages created in this
+  plan carry no `expected_hash`.
+- Later operations address the page as it is after the earlier operations.
+- `source_versions`: one entry for every source_id in the plan, taken from the `content_hash` printed by
+  `source <id>`. If the raw file changes after the plan is written, the tool reports `SOURCE_STALE`.
+- Any operation that changes an existing page may carry
+  `"human_override": {"confirmed_by_user": true, "note": "…"}`, **only after the user has explicitly agreed to
+  overwrite their own edits made in Obsidian**.
 
 ## Operations
 
@@ -42,22 +55,28 @@
 
 ```json
 {"operation_id": "op-001", "type": "create_page", "page_id": "widget-service", "page_type": "entity",
- "title": "Widget Service", "meta": {"tags": ["system"], "aliases": ["widgets"], "scope": "可选"},
- "body": "一句话介绍。\n\n## Facts\n\n- …（[[meeting-2026-09-10-widget-review|Widget Review Meeting]]）",
+ "title": "Widget Service", "meta": {"tags": ["system"], "aliases": ["widgets"], "scope": "optional"},
+ "body": "One-sentence introduction.\n\n## Facts\n\n- …（[[meeting-2026-09-10-widget-review|Widget Review Meeting]]）",
  "source_ids": ["meeting-2026-09-10-widget-review"]}
 ```
 
-- `body` 是 H1 之后的内容，不含 frontmatter 和 H1；其中的 heading 从 `##` 开始。
-- `meta` 只能包含 `tags`、`aliases`、`scope`。
-- **decision 页**需要加：`"decision": {"status": "proposed|active", "decided_on": "YYYY-MM-DD|unknown", "date_confidence": "high|medium|low"}`
-- **source 页**需要加（此时 `page_id` 必须等于 `source_id`，可以省略 `source_ids`）：
+- `body` is the content after the H1, without frontmatter or H1; its headings start at `##`.
+- `meta` may contain only `tags`, `aliases`, `scope`.
+- A **decision page** also needs:
+  `"decision": {"status": "proposed|active", "decided_on": "YYYY-MM-DD|unknown", "date_confidence": "high|medium|low"}`
+- A **source page** also needs (its `page_id` must equal its `source_id`, and `source_ids` may be omitted):
   `"source": {"source_id": "…", "source_type": "document|meeting|session", "raw_path": "raw/…", "source_date": "YYYY-MM-DD|unknown", "date_confidence": "high|medium|low", "date_basis": "…", "synthetic": false}`
-  `source_id`、`source_type`、`raw_path` 必须与 `source <id>` 的输出一致。只有 status 为 `new` 的 source 能建 source 页（已 ingest 的会报 `SOURCE_ALREADY_INGESTED`；`changed` 的 source 通过修改已有 source 页来重新 ingest）。
+  `source_id`, `source_type` and `raw_path` must match the output of `source <id>`. The source must also be listed
+  in the plan-level `source_ids` (and so in `source_versions`), and this create_page must come before every
+  operation that cites it. Only a source with status `new` can get a source page (an ingested one reports
+  `SOURCE_ALREADY_INGESTED`; a `changed` source is re-ingested by changing the body of its existing source page).
 
 ### update_section
 
-替换一个 section 的正文**和它的全部子 section**，heading 行本身保留。`section_path: ["__preamble__"]` 表示替换 preamble。
-`content` 中的 heading 必须比目标 section 深，而且不能跳级；preamble 的 content 中不能有 heading。
+Replaces a section's text **and all its subsections**; the heading line itself stays.
+`section_path: ["__preamble__"]` replaces the preamble.
+Headings in `content` must be deeper than the target section and must not skip a level; the content for the
+preamble cannot contain headings.
 
 ```json
 {"operation_id": "op-002", "type": "update_section", "page_id": "widget-service", "expected_hash": "sha256:…",
@@ -66,8 +85,9 @@
 
 ### update_section_body
 
-只替换 section **自身的正文**（heading 之后、第一个子 heading 之前），子 section 保持不变。`content` 中不能有 heading。
-只想改一段文字或一张表、又不想重写下面的子 section 时用它。
+Replaces only the section's **own text** (after the heading, before the first subheading); subsections stay as
+they are. `content` cannot contain headings.
+Use it to change a paragraph or a table without rewriting the subsections below.
 
 ```json
 {"operation_id": "op-002", "type": "update_section_body", "page_id": "widget-service", "expected_hash": "sha256:…",
@@ -76,11 +96,12 @@
 
 ### append_to_section
 
-把内容追加到 section **整个子树的末尾**（如果有子 section，内容会落在最后一个子 section 里）。`content` 中不能有 heading。
+Appends content to the **end of the section's whole subtree** (if it has subsections, the content lands in the
+last one). `content` cannot contain headings.
 
 ```json
 {"operation_id": "op-003", "type": "append_to_section", "page_id": "widget-service", "expected_hash": "sha256:…",
- "section_path": ["Facts"], "content": "- 新事实（[[…]]）", "source_ids": ["…"]}
+ "section_path": ["Facts"], "content": "- a new fact（[[…]]）", "source_ids": ["…"]}
 ```
 
 ### add_section
@@ -90,12 +111,13 @@
  "parent_path": [], "heading": "Incidents", "position": {"after": "Facts"}, "content": "…", "source_ids": ["…"]}
 ```
 
-- `parent_path: []` 表示新建顶层 `##`。`position` 可以是 `"start"`、`"end"`（默认）或 `{"after": "<同级 heading>"}`。
-- 同一父节点下不能有同名 heading。
+- `parent_path: []` creates a new top-level `##`. `position` is `"start"`, `"end"` (default) or
+  `{"after": "<sibling heading>"}`.
+- No two headings with the same text under the same parent; a heading cannot be empty or `__preamble__`.
 
 ### update_meta
 
-只能修改 `title`、`tags`、`aliases`、`scope`；修改 `title` 时，工具会同步修改 H1。
+Changes only `title`, `tags`, `aliases`, `scope`; changing `title` also updates the H1.
 
 ```json
 {"operation_id": "op-005", "type": "update_meta", "page_id": "widget-service", "expected_hash": "sha256:…",
@@ -107,60 +129,68 @@
 ```json
 {"operation_id": "op-006", "type": "decision_change", "page_id": "use-queue-a", "expected_hash": "sha256:…",
  "new_status": "superseded", "superseded_by": "use-queue-b",
- "history_note": "被 … 取代",
+ "history_note": "superseded by …",
  "source_ids": ["…"]}
 ```
 
-- 允许的状态迁移：proposed→active、proposed→revoked、proposed/active→superseded、active→revoked。superseded 和 revoked 是终态。
-- `superseded_by` 必须是 status 为 active 的 decision 页（已存在，或在本 plan 中先创建）。
-- 工具会在 `## History` 末尾自动追加一行记录（`history_note` 必填）。
-- **时间校验由工具执行**：
-  - 两边都有明确日期，且 date_confidence 不是 low → 按日期判断，较早的决定不能推翻较新的决定；
-  - 任一方日期为 unknown 或 low → 被拒绝（`TEMPORAL_UNCERTAINTY`），除非加上
-    `"temporal_override": {"confirmed_by_user": true, "note": "用户如何确认的"}`。
-    **只有在用户明确回答后才能加这个字段。**
+- Allowed transitions: proposed→active, proposed→revoked, proposed/active→superseded, active→revoked. superseded
+  and revoked are final.
+- `superseded_by` must be a decision page with status active (existing, or created earlier in this plan).
+- The tool appends a line to the end of `## History` (`history_note` is required).
+- **The tool performs the temporal check**:
+  - both sides have a definite date and date_confidence is not low → decided by date: an earlier decision cannot
+    overturn a newer one;
+  - either date is unknown or low → rejected (`TEMPORAL_UNCERTAINTY`), unless the operation carries
+    `"temporal_override": {"confirmed_by_user": true, "note": "how the user confirmed it"}`.
+    **Add this field only after the user has explicitly answered.**
 
-### delete_page（只在用户要求时使用）
+### delete_page (only when the user asks)
 
 ```json
 {"operation_id": "op-007", "type": "delete_page", "page_id": "old-topic", "expected_hash": "sha256:…",
- "reason": "内容已并入 [[new-topic|New Topic]]", "source_ids": []}
+ "reason": "merged into [[new-topic|New Topic]]", "source_ids": []}
 ```
 
-- decision 页不能删（用 `decision_change → revoked`）；source 页不能删（用 `retract_source`）。
-- plan 执行后，其他页面中不能再有指向被删页面的链接：同一个 plan 要先改掉它们。
+- A decision page cannot be deleted (use `decision_change → revoked`); a source page cannot be deleted (use
+  `retract_source`).
+- After the plan is applied, no other page may still link to the deleted page: the same plan must change those
+  pages first.
 
-### retract_source（只在用户要求时使用）
+### retract_source (only when the user asks)
 
 ```json
 {"operation_id": "op-009", "type": "retract_source", "page_id": "meeting-2026-09-10-widget-review",
- "expected_hash": "sha256:…", "reason": "误 ingest", "source_ids": ["meeting-2026-09-10-widget-review"]}
+ "expected_hash": "sha256:…", "reason": "ingested by mistake", "source_ids": ["meeting-2026-09-10-widget-review"]}
 ```
 
-- 删除 source 页，并把 source 标为 `retracted`。先运行 `trace <source_id>`，同一个 plan 必须：
-  - 修改每一个 `sources` 包含它的页面（工具会自动从这些页面的 `sources` 中去掉它），并去掉指向它的链接；
-  - revoke 所有 origin 只有它的 active / proposed decision。
+- Deletes the source page and marks the source `retracted`. Run `trace <source_id>` first; the same plan must:
+  - change every page whose `sources` include it (the tool removes it from those pages' `sources` itself), and
+    remove the links to it;
+  - revoke every active / proposed decision whose only origins are retracted sources.
 
 ### restructure_page
 
-本 vault 中**不可用**（validate 会报 `RESTRUCTURE_DISABLED`）。用 section 级 operation 或 `update_section_body`。
+**Not available** in this vault (validate reports `RESTRUCTURE_DISABLED`). Use section-level operations or
+`update_section_body`.
 
-## 命令
+## Commands
 
 ```text
-python tools/second_brain.py status                          # sources 状态、pending plans、锁、未完成事务
-python tools/second_brain.py source <source_id>              # content_hash、日期、状态
-python tools/second_brain.py trace <source_id>               # 引用这个 source 的页面和 section（撤回前使用）
-python tools/second_brain.py hash <page_id> --sections       # page / section hash 和结构
+python tools/second_brain.py status                          # source statuses, pending plans, lock, incomplete transactions
+python tools/second_brain.py source <source_id>              # content_hash, date, status
+python tools/second_brain.py trace <source_id>               # pages and sections citing this source (before a retraction)
+python tools/second_brain.py hash <page_id> --sections       # page / section hashes and structure, human-edit state
 python tools/second_brain.py validate-plan plans/pending/<plan_id>.json
 python tools/second_brain.py render-plan  plans/pending/<plan_id>.json
 ```
 
-每条命令单独运行，不要接管道。
+Run each command on its own; do not pipe.
 
-常见错误码：
-- `PLAN_STALE`（页面变了，重新取 hash）、`SOURCE_STALE`（raw 变了）、`SOURCE_NOT_READY`、`SOURCE_ALREADY_INGESTED`；
-- `HUMAN_EDITED_SECTION` / `HUMAN_EDITED_META`（用户改过，先问用户）；
-- `BROKEN_LINK`、`PATH_NOT_FOUND`、`PATH_AMBIGUOUS`、`HEADING_LEVEL`、`CONTENT_HEADING`；
-- `UNKNOWN_SOURCE`、`UNKNOWN_PAGE`、`PAGE_EXISTS`、`FORBIDDEN_META`、`BAD_TRANSITION`、`TEMPORAL_UNCERTAINTY`、`TEMPORAL_ORDER`；
-- `DELETE_FORBIDDEN`、`SOURCE_STILL_CITED`、`DECISION_FROM_RETRACTED`、`SECRET_IN_PLAN`。
+Common error codes:
+- `PLAN_STALE` (a page changed: get the hash again), `SOURCE_STALE` (the raw file changed), `SOURCE_NOT_READY`,
+  `SOURCE_ALREADY_INGESTED`;
+- `HUMAN_EDITED_SECTION` / `HUMAN_EDITED_META` (the user edited it: ask the user first);
+- `BROKEN_LINK`, `PATH_NOT_FOUND`, `PATH_AMBIGUOUS`, `HEADING_LEVEL`, `CONTENT_HEADING`;
+- `UNKNOWN_SOURCE`, `UNKNOWN_PAGE`, `PAGE_EXISTS`, `FORBIDDEN_META`, `BAD_TRANSITION`, `TEMPORAL_UNCERTAINTY`,
+  `TEMPORAL_ORDER`, `DATE_DOWNGRADE`;
+- `DELETE_FORBIDDEN`, `SOURCE_STILL_CITED`, `DECISION_FROM_RETRACTED`, `SECRET_IN_PLAN`.

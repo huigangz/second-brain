@@ -96,8 +96,9 @@ vault-template/          what `install` copies into a vault: agent rules, ingest
 tests/                   unit tests (stdlib unittest)
 ```
 
-The vault README (daily use) is in English and Chinese. The agent rules (`AGENTS.md`, `INGEST.md`,
-`PLAN-SCHEMA.md`) are in Chinese; agents follow them without problems.
+The agent rules (`AGENTS.md`, `INGEST.md`, `PLAN-SCHEMA.md`) are in English; the vault README is in English
+and Chinese. The wiki itself is written in the language set in `AGENTS.md` §6 (Chinese by default, with the
+English equivalents of its fixed markers listed there).
 
 ## License
 

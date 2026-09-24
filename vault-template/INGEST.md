@@ -1,38 +1,53 @@
 # Ingest Procedure
 
-> rules-version: stage1-v0.3 · 适用于 [AGENTS.md](AGENTS.md)（写入方式见 AGENTS.md §8 和 PLAN-SCHEMA.md）
+> rules-version: stage1-v0.4 (English translation of stage1-v0.3) · applies with [AGENTS.md](AGENTS.md) (how to
+> write: AGENTS.md §8 and PLAN-SCHEMA.md)
 
-用户会说 "ingest <source_id>" 或 "ingest raw/<path>"。先运行 `status` 和 `source <id>`：只处理状态为 `new` / `changed` 的 source。**每次只处理一个 source。** 即使 raw/ 中还有其他未处理文件，也不要顺手处理。
+The user says "ingest <source_id>" or "ingest raw/<path>". First run `status` and `source <id>`: work only on a
+source whose status is `new` / `changed`. **Handle one source at a time.** Even if raw/ holds other unprocessed
+files, do not take them on along the way.
 
-## 步骤
+## Steps
 
-1. **完整阅读 source。** 长文件要分段读完，不能只读开头。PDF 如果有同名的 `.txt` 伴随文件，读伴随文件。
-2. **读取现有 wiki。** 先读 `wiki/index.md`，再读与本 source 主题相关的已有页面（同一系统、同一项目、同一决定）。
-3. **提取与分类（先在内部完成，不写文件）。** 按 AGENTS.md §2 把内容逐条归类。特别检查：
-   - 每一条候选 decision：谁决定的？是否被明确接受？有没有 hedge 语气？
-   - 每一条候选 fact：后文有没有被更正或推翻？
-   - 排查类 session：哪些假设被排除了？最终确认的根因是什么？
-4. **确定日期**：以 `source <id>` 的结果为起点，按 AGENTS.md §4 的规则，写明 date_confidence 和 date_basis。
-5. **对要修改的已有页面运行 `hash <page_id> --sections`**，确认 section 结构和 expected_hash。把 `source <id>` 的 content_hash 写进 `source_versions`。
-6. **写一个 plan**（`plans/pending/<plan_id>.json`）：用 `create_page` 建 source 页，并用 operation 表达对 decision / entity / concept 页的全部创建和更新。能更新就不新建。
-7. **Supersession 检查。** 本 source 是否推翻、修改或撤销了 `wiki/decisions/` 中已有的决定？是否接受或否决了某个 `proposed` 决定？如果是，按 AGENTS.md §3 处理，包括时间校验。
-8. **补 wikilinks**（写进 plan 的 content 中）。index 和 log 由工具生成，不要处理。然后运行 `validate-plan` 直到 `OK`，再运行 `render-plan` 检查 diff。
-9. **自检（对照 render 的 diff 逐页检查本次改动的 durable 页面）：**
-   - 没有 ruled-out 假设；
-   - 所有 unverified 内容都以 `未验证：` 开头；
-   - 被更正的数值或状态只保留最终版本；
-   - 没有 proposed 结论被写成 active 决定；
-   - 没有 superseded 页正文中仍然保留着有效内容（逐条列出旧决定的组成部分核对，AGENTS.md §3 第 3 条）；
-   - 所有链接都是 `[[page_id|标题]]` 形式。
-10. **最终报告**，交给用户（**不要**执行 plan）：
-   - plan 文件路径和 `render-plan` 输出第一行的 PLAN SHA256
-   - 用了哪些 operation；如果某个改动因为 operation 的限制无法按理想方式表达，说明理想做法是什么、实际怎么做的
-   - 3–5 条关键 takeaways
-   - 创建的页面 / 更新的页面（每页一句话说明改了什么）
-   - 被分类为 open question / rejected / ruled out / unverified 的条目（各列简短清单）
-   - Supersession 和时间不确定的情况（如果有，**明确提问**）
-   - 你没把握的分类判断
-   - 如果 validate 报了 `HUMAN_EDITED_*`：转述 diff，并询问用户是否允许覆盖
+1. **Read the whole source.** Read long files to the end, in parts if needed, not just the beginning. For a PDF
+   with a `.txt` companion of the same name, read the companion.
+2. **Read the existing wiki.** Read `wiki/index.md` first, then the existing pages related to this source's topics
+   (the same system, the same project, the same decision).
+3. **Extract and classify (internally first; write no files).** Classify every item following AGENTS.md §2. Check
+   in particular:
+   - every candidate decision: who decided? Was it explicitly accepted? Is it hedged?
+   - every candidate fact: is it corrected or overturned later in the source?
+   - troubleshooting sessions: which hypotheses were ruled out? What was the confirmed root cause?
+4. **Set the date**: start from the output of `source <id>`, follow the rules of AGENTS.md §4, and state
+   date_confidence and date_basis.
+5. **Run `hash <page_id> --sections` on every existing page you will change**, to confirm its section structure
+   and expected_hash. Put the content_hash from `source <id>` into `source_versions`.
+6. **Write one plan** (`plans/pending/<plan_id>.json`): create the source page with `create_page`, and express
+   every creation and update of decision / entity / concept pages as operations. Update rather than create
+   whenever you can.
+7. **Supersession check.** Does this source overturn, change or revoke an existing decision in `wiki/decisions/`?
+   Does it accept or reject a `proposed` decision? If so, follow AGENTS.md §3, including the temporal check.
+8. **Add wikilinks** (in the plan's content). The tool generates index and log; do not touch them. Then run
+   `validate-plan` until it prints `OK`, and `render-plan` to check the diff.
+9. **Self-check (go through each durable page changed by this plan against the rendered diff):**
+   - no ruled-out hypotheses;
+   - every piece of unverified content starts with the unverified marker (`未验证：`, AGENTS.md §6);
+   - corrected numbers or statuses appear only in their final version;
+   - no proposed conclusion is written as an active decision;
+   - no superseded page still holds content that is still valid in its body (check each component of the old
+     decision one by one, AGENTS.md §3 rule 3);
+   - every link has the form `[[page_id|title]]`.
+10. **Final report** to the user (do **not** apply the plan):
+    - the plan file path, and the PLAN SHA256 from the first line of the `render-plan` output
+    - which operations you used; if an operation's limits kept a change from being expressed the ideal way, say
+      what the ideal would have been and what you did instead
+    - 3–5 key takeaways
+    - pages created / pages updated (one sentence per page on what changed)
+    - the items classified as open question / rejected / ruled out / unverified (a short list for each)
+    - supersessions and temporal uncertainties (if any, **ask explicitly**)
+    - classification calls you are unsure about
+    - if validate reported `HUMAN_EDITED_*`: relay the diff and ask the user whether it may be overwritten
 
-Pilot 模式下，**不需要在写 plan 之前等用户确认 takeaways**，直接写好 plan、validate、render 后再报告。这样才能评估 Agent 自己的判断。
-plan 被批准并执行后，用户会告诉你；下一个 source 的 hash 要在执行之后重新获取。
+In pilot mode, **do not wait for the user to confirm the takeaways before writing the plan**: write the plan,
+validate and render it, then report. That is how the agent's own judgement can be evaluated.
+After the plan is approved and applied, the user will tell you; get fresh hashes for the next source after that.

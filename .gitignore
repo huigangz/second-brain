@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.claude/settings.local.json
+
+# never commit source material, evaluation data or a vault into this repo:
+# they live in a separate private directory / the vault itself
+raw/
+wiki/
+state/
+plans/

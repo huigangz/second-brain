@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "python tools/agent_guard.py",
+        "bash": "python3 tools/agent_guard.py",
+        "powershell": "python tools/agent_guard.py",
+        "windows": "python tools/agent_guard.py",
+        "timeout": 15
+      }
+    ]
+  }
+}

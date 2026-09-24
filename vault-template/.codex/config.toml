@@ -1,0 +1,6 @@
+# Codex settings for this vault (loaded only when the project is trusted).
+# read-only sandbox: the agent can read everything and run read-only commands;
+# any file write (the plan JSON) needs your approval. Codex hooks cannot currently block
+# apply_patch writes (openai/codex#27833), so the sandbox is the real write barrier.
+sandbox_mode = "read-only"
+approval_policy = "on-request"

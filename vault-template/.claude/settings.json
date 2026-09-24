@@ -1,0 +1,50 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python tools/second_brain.py status:*)",
+      "Bash(python tools/second_brain.py source:*)",
+      "Bash(python tools/second_brain.py trace:*)",
+      "Bash(python tools/second_brain.py hash:*)",
+      "Bash(python tools/second_brain.py validate-plan:*)",
+      "Bash(python tools/second_brain.py render-plan:*)",
+      "Write(plans/pending/**)"
+    ],
+    "deny": [
+      "Edit(raw/**)",
+      "Write(raw/**)",
+      "Edit(wiki/**)",
+      "Write(wiki/**)",
+      "Edit(state/**)",
+      "Write(state/**)",
+      "Edit(tools/**)",
+      "Write(tools/**)",
+      "Edit(plans/applied/**)",
+      "Write(plans/applied/**)",
+      "Edit(plans/rejected/**)",
+      "Write(plans/rejected/**)",
+      "Bash(python tools/second_brain.py apply-plan:*)",
+      "Bash(python tools/second_brain.py reject-plan:*)",
+      "Bash(python tools/second_brain.py rollback:*)",
+      "Bash(python tools/second_brain.py discover:*)",
+      "Bash(python tools/second_brain.py maintain:*)",
+      "Bash(python tools/second_brain.py install:*)",
+      "Bash(python tools/second_brain.py upgrade:*)",
+      "Bash(python tools/second_brain.py unlock:*)",
+      "Bash(python tools/second_brain.py init:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python tools/agent_guard.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

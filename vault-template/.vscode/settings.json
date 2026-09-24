@@ -1,0 +1,8 @@
+{
+  "chat.useAgentsMdFile": true,
+  "chat.useHooks": true,
+  "chat.tools.global.autoApprove": false,
+  "chat.tools.terminal.autoApprove": {
+    "/second_brain\\.py\\s+(apply-plan|reject-plan|rollback|discover|maintain|unlock|init)(\\s|$)/": false
+  }
+}

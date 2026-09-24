@@ -12,4 +12,4 @@ First public version.
 - `vault-template/`: agent rules (`AGENTS.md`, `INGEST.md`, `PLAN-SCHEMA.md`), the ingest skill and the
   per-agent permission and hook configuration.
 - `install` / `upgrade`: create a vault from this project and keep its rule files and tools in sync.
-- Reviewed in thirteen rounds of code review and release gates before release; 152 tests.
+- Reviewed in thirteen rounds of code review and release gates before release; 154 tests.

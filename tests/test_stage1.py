@@ -1690,6 +1690,30 @@ class TestKit(unittest.TestCase):
         with self.assertRaises(sb.PlanError):
             sb.install_vault(self.vault, self.project)  # already a vault
 
+    def test_install_never_touches_a_target_that_appears_meanwhile(self):
+        """gate 15 P1: a file created at the target after the check must survive, and nothing of the kit lands
+        next to it; the staging directory is cleaned up."""
+        from unittest import mock
+        original_init = sb.init_vault
+
+        def human_creates_target(staging):
+            self.vault.mkdir()
+            (self.vault / "AGENTS.md").write_text("human file created during install\n", encoding="utf-8")
+            original_init(staging)
+
+        with mock.patch.object(sb, "init_vault", human_creates_target):
+            with self.assertRaises(sb.PlanError):
+                sb.install_vault(self.vault, self.project)
+        self.assertEqual([p.name for p in self.vault.iterdir()], ["AGENTS.md"])
+        self.assertEqual((self.vault / "AGENTS.md").read_text(encoding="utf-8"), "human file created during install\n")
+        self.assertEqual(sorted(p.name for p in self.vault.parent.iterdir()), ["project", "vault"])  # no staging left
+
+    def test_install_needs_a_new_directory(self):
+        self.vault.mkdir()
+        with self.assertRaises(sb.PlanError):
+            sb.install_vault(self.vault, self.project)  # even an empty existing directory: install never writes into one
+        self.assertEqual(list(self.vault.iterdir()), [])
+
     def test_install_never_overwrites(self):
         self.vault.mkdir()
         (self.vault / "AGENTS.md").write_text("my own rules", encoding="utf-8")

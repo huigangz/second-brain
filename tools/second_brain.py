@@ -2713,17 +2713,30 @@ def _write_kit_record(target: Path, kit: dict[str, bytes], project: Path, event:
 
 
 def install_vault(target: Path, project: Path = PROJECT) -> list[str]:
-    """A new vault: the rule files and tools, then `init`. Never overwrites a different existing file."""
+    """A new vault at `target`, which must not exist yet: the vault is built completely in a sibling staging
+    directory (rule files, tools, `init`, kit record) and then renamed into place in one step. Nothing is ever
+    written into an existing directory, so nothing there can be overwritten; if `target` appears meanwhile,
+    the rename fails and the staging directory is removed."""
     kit = _kit_payload(project)
     if State(target).managed:
         raise PlanError("SCHEMA", f"{target} is already a vault; use upgrade")
-    clash = [rel for rel, data in kit.items() if (target / rel).exists() and (target / rel).read_bytes() != data]
-    if clash:
-        raise PlanError("SCHEMA", "install would overwrite existing files: " + ", ".join(clash))
-    for rel, data in kit.items():
-        _atomic_write_bytes(target / rel, data)
-    init_vault(target)
-    _write_kit_record(target, kit, project, "kit_installed")
+    if target.exists():
+        raise PlanError("SCHEMA", f"{target} already exists; install creates a new vault directory "
+                                  "(to update an existing vault, use upgrade)")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.installing-", dir=target.parent))
+    try:
+        for rel, data in kit.items():
+            _atomic_write_bytes(staging / rel, data)
+        init_vault(staging)
+        _write_kit_record(staging, kit, project, "kit_installed")
+        try:
+            os.rename(staging, target)  # atomic; fails if target appeared (a non-empty dir or any file)
+        except OSError as e:
+            raise PlanError("SCHEMA", f"{target} appeared during install; nothing was written to it ({e})")
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
     return [f"installed {len(kit)} files into {target}", "next: put sources into raw/ and run "
             "`python tools/second_brain.py discover` there (see README.md)"]
 

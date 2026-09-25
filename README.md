@@ -54,7 +54,7 @@ python tools/second_brain.py apply-plan  plans/pending/<plan_id>.json --approve 
 ```
 
 The vault's own [README](vault-template/README.md) covers daily use: reviewing, rollback, `maintain`,
-deletion and retraction.
+deletion and retraction. Setting up and upgrading a vault on another machine: [docs/新机器配置.md](docs/新机器配置.md) (Chinese).
 
 ## Keeping a vault up to date
 
@@ -96,6 +96,7 @@ tools/second_brain.py    the applier and vault CLI (install, discover, validate/
 tools/agent_guard.py     PreToolUse guard shared by all agents
 vault-template/          what `install` copies into a vault: agent rules, ingest skill, agent configuration
 tests/                   unit tests (stdlib unittest)
+docs/                    setup guide for another machine (Chinese)
 ```
 
 The agent rules (`AGENTS.md`, `INGEST.md`, `PLAN-SCHEMA.md`) are in English; the vault README is in English

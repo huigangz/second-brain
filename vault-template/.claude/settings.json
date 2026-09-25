@@ -22,16 +22,19 @@
       "Write(plans/applied/**)",
       "Edit(plans/rejected/**)",
       "Write(plans/rejected/**)",
-      "Bash(python tools/second_brain.py apply-plan:*)",
       "Bash(python tools/second_brain.py reject-plan:*)",
       "Bash(python tools/second_brain.py rollback:*)",
-      "Bash(python tools/second_brain.py discover:*)",
       "Bash(python tools/second_brain.py maintain:*)",
       "Bash(python tools/second_brain.py install:*)",
       "Bash(python tools/second_brain.py upgrade:*)",
       "Bash(python tools/second_brain.py unlock:*)",
       "Bash(python tools/second_brain.py init:*)"
-    ]
+    ],
+    "ask": [
+      "Bash(python tools/second_brain.py apply-plan:*)",
+      "Bash(python tools/second_brain.py discover:*)"
+    ],
+    "disableBypassPermissionsMode": "disable"
   },
   "hooks": {
     "PreToolUse": [

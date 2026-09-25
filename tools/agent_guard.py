@@ -1,12 +1,15 @@
 """PreToolUse guard shared by Claude Code, GitHub Copilot (VS Code / CLI) and Codex.
 
 Every agent calls this script before a tool runs and passes a JSON payload on stdin.
-Exit code 0 allows the call; exit code 2 denies it (all four agents treat 2 as deny), with the
-reason on stderr. Policy (vault AGENTS.md §7):
+Exit code 0 allows the call (or, with a JSON permissionDecision "ask" on stdout, asks the human); exit
+code 2 denies it (all four agents treat 2 as deny), with the reason on stderr. Policy (vault AGENTS.md §7):
 
 - file writes are allowed only for  plans/pending/*.json  inside the vault;
 - shell commands are allowed only if every pipeline segment is a read-only command, or one of
   `python tools/second_brain.py status|source|trace|hash|validate-plan|render-plan`;
+- `second_brain.py discover` and `apply-plan <plan> --approve <sha256>`, run on their own, get
+  "ask": the agent's permission prompt makes the human confirm each run (Claude Code, VS Code).
+  Copilot CLI gets a deny (no confirmed "ask" support); Codex keeps them forbidden in its rules;
 - everything else that edits files or runs commands is denied. Read/search tools are allowed.
 
 This is defense in depth. The approval binding (--approve <sha256>) and the checks in
@@ -22,6 +25,7 @@ import sys
 from pathlib import Path
 
 AGENT_COMMANDS = {"status", "source", "trace", "hash", "validate-plan", "render-plan"}
+ASK_COMMANDS = {"discover", "apply-plan"}  # the agent may run these only after the human confirms each one
 # No command here may run code or write files; the options that would are denied in _segment_ok.
 # awk / foreach-object / less / more were removed after review (2026-09-23): each can write or execute.
 READ_ONLY = {
@@ -147,7 +151,9 @@ def _segment_ok(segment: str) -> str | None:
     if head == "sed":
         opts = [t for t in args if t.startswith("-")]
         scripts = [t for t in args if not t.startswith("-")][:1]
-        if set(opts) - {"-n", "--quiet", "--silent", "-E", "-r"} or "-n" not in opts and "--quiet" not in opts                 and "--silent" not in opts or not scripts or not SED_PRINT.match(scripts[0].replace(" ", "")):
+        quiet = {"-n", "--quiet", "--silent"} & set(opts)
+        if set(opts) - {"-n", "--quiet", "--silent", "-E", "-r"} or not quiet or not scripts \
+                or not SED_PRINT.match(scripts[0].replace(" ", "")):
             return "sed is allowed only as  sed -n '<from>,<to>p' <file>"
     for prefix in DENIED_OPTIONS.get(head, ()) + ANY_COMMAND_DENIED:
         if any(t.lower().startswith(prefix) for t in args):
@@ -187,8 +193,51 @@ def _check_command(command: str) -> str | None:
     return None
 
 
-def decide(payload: dict) -> str | None:
-    """None = allow, otherwise the deny reason."""
+class Ask(str):
+    """Neither allow nor deny: the agent may run this only after the human confirms it in the agent's own
+    permission prompt. The text is shown in that prompt."""
+
+
+PLAN_SHA = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _ask_command(command: str, payload: dict) -> "Ask | str | None":
+    """discover / apply-plan run by the agent: allowed only as one standalone command, and only with a prompt.
+    Returns None when `command` is not one of them (the normal checks apply)."""
+    command = command.replace("\\", "/")
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        return None
+    inner = _unwrap(tokens)
+    if inner is not None:
+        return _ask_command(inner, payload)
+    if not tokens or Path(tokens[0]).name.lower() not in ("python", "python3", "py", "python.exe"):
+        return None
+    rest = [t for t in tokens[1:] if not t.startswith("-3")]
+    if len(rest) < 2 or rest[0].lstrip("./") != "tools/second_brain.py" or rest[1] not in ASK_COMMANDS:
+        return None
+    sub, args = rest[1], rest[2:]
+    # the prompt must show exactly what runs: one command, nothing chained, redirected or substituted
+    if re.search(r"[|;&\n<>`]|\$\(", command):
+        return f"second_brain.py {sub} must be run on its own, not chained or redirected"
+    if "toolName" in payload or "toolArgs" in payload:  # Copilot CLI: no confirmed support for "ask"
+        return f"second_brain.py {sub} is a human-only command in Copilot CLI"
+    if sub == "apply-plan":
+        ok = (len(args) == 3 and args[1] == "--approve" and PLAN_SHA.match(args[2])
+              and re.fullmatch(r"plans/pending/[^/]+\.json", args[0].lstrip("./")))
+        if not ok:
+            return "apply-plan only as: python tools/second_brain.py apply-plan plans/pending/<plan_id>.json --approve <sha256>"
+        return Ask(f"APPLY PLAN {args[0]} — approve only if {args[2][:12]}… is the PLAN SHA256 of the render you "
+                   "reviewed, and you told the agent to apply it")
+    if args and not (len(args) == 3 and args[0] == "--link"):
+        return "discover only as: python tools/second_brain.py discover  (or: discover --link <raw path> <source_id>)"
+    return Ask("DISCOVER — register new files in raw/ and run the secret preflight"
+               + (f"; link {args[1]} to {args[2]}" if args else ""))
+
+
+def decide(payload: dict) -> "Ask | str | None":
+    """None = allow; Ask = allow only after the human confirms it; any other string = the deny reason."""
     name, args = _normalise(payload)
     if name.lower() in NON_FILE_TOOLS:
         return None
@@ -202,7 +251,8 @@ def decide(payload: dict) -> str | None:
         bad = [t for t in targets if not _allowed_write(t, vault)]
         return f"writes are limited to plans/pending/*.json (got: {', '.join(bad)})" if bad else None
     if command is not None and (SHELL_TOOLS.search(name) or not name):
-        return _check_command(command)
+        asked = _ask_command(command, payload)
+        return asked if asked is not None else _check_command(command)
     return None
 
 
@@ -212,9 +262,14 @@ def main() -> int:
         payload = json.loads(raw) if raw.strip() else {}
     except ValueError:
         deny("unreadable hook payload")
-    reason = decide(payload if isinstance(payload, dict) else {})
-    if reason:
-        deny(reason)
+    result = decide(payload if isinstance(payload, dict) else {})
+    if isinstance(result, Ask):
+        # Claude Code and VS Code: show a permission prompt. (Codex keeps these commands forbidden in its rules.)
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask",
+                                                 "permissionDecisionReason": "[second-brain] " + result}}))
+        return 0
+    if result:
+        deny(result)
     return 0
 
 

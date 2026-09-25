@@ -1,7 +1,7 @@
 # Second Brain — Agent Rules
 
-> rules-version: stage1-v0.4 (English translation of stage1-v0.3; the rules are unchanged) · the semantic rules
-> come from Stage 0 (0A-v0.2.1 / 0B-v1), revised from its findings.
+> rules-version: stage1-v0.5 (stage1-v0.3 in English, plus: the agent may run discover / apply-plan with the
+> user's consent, §8) · the semantic rules come from Stage 0 (0A-v0.2.1 / 0B-v1), revised from its findings.
 > Based on the wiki schema of NicholasSpisak/second-brain, with added rules for decisions and evidence classes.
 
 You maintain this knowledge base: read the sources in `raw/` and organize the knowledge worth keeping into `wiki/`.
@@ -182,10 +182,13 @@ English: `Unverified: `, `According to [[source-id|Source title]]: …`, `As of 
 
 - Modifying `raw/`.
 - Using Write / Edit on any file under `wiki/`, or under `plans/applied/`.
-- Running `apply-plan`, `reject-plan`, `rollback`, `discover`, `maintain --fix`, `unlock`. Only a human runs these.
-- Running any shell command other than `python tools/second_brain.py status|source|trace|hash|validate-plan|render-plan`;
-  do not pipe commands or chain other commands; do not read or write files through the shell. Read only with
-  Read / Grep / Glob, and write only plan files with Write.
+- Running `reject-plan`, `rollback`, `maintain --fix`, `maintain --revert`, `unlock`, `install`, `upgrade`. Only a
+  human runs these.
+- Running `discover` or `apply-plan` without the user's consent for that very run (see §8 "Commands that need the
+  user's consent").
+- Running any other shell command than `python tools/second_brain.py status|source|trace|hash|validate-plan|render-plan`
+  (and `discover` / `apply-plan` as in §8); do not pipe commands or chain other commands; do not read or write files
+  through the shell. Read only with Read / Grep / Glob, and write only plan files with Write.
 - Using `human_override` or `temporal_override` without the user's explicit consent.
 - Reading or ingesting a source whose `status` is not `new` / `changed` (`blocked_secret` may contain a secret: do
   not open it; `blocked_unscannable` is a file that cannot be scanned (a PDF, DOCX, … without a `.txt` companion,
@@ -219,5 +222,17 @@ English: `Unverified: `, `According to [[source-id|Source title]]: …`, `As of 
 - Use deletion and retraction (`delete_page`, `retract_source`) only when the user asks. Before retracting, run
   `trace <source_id>`; the same plan must clean up every reference.
 - The available operations and fields: [PLAN-SCHEMA.md](PLAN-SCHEMA.md).
+
+**Commands that need the user's consent.** You may run `discover` and `apply-plan` yourself, but only with the
+user's consent for that very run. Each run also shows the user a permission prompt they must confirm; never try to
+avoid it with another form of the command.
+- `discover`: only when the user asks for it (for example after adding files to raw/). Run it on its own:
+  `python tools/second_brain.py discover` (or `discover --link <raw path> <source_id>` when the user asks you to
+  link a moved file). Report its output to the user; a `BLOCKED` source is not to be opened.
+- `apply-plan`: only after the user has reviewed the render of that plan and has explicitly told you to apply it.
+  Run exactly `python tools/second_brain.py apply-plan plans/pending/<plan_id>.json --approve <sha256>`, with the
+  PLAN SHA256 of the render the user reviewed. One approval covers one plan. If the plan changed after the user
+  reviewed it, do not apply it: render it again and ask again. Never apply a plan the user has not approved.
+- In Codex and in Copilot CLI these two commands stay human-only (the tools refuse them): ask the user to run them.
 
 The ingest steps in detail: [INGEST.md](INGEST.md).

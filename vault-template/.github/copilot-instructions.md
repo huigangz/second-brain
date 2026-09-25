@@ -7,5 +7,6 @@ This repository is a knowledge-base vault. Before doing anything, read and follo
 3. [PLAN-SCHEMA.md](../PLAN-SCHEMA.md) — the write-plan format
 
 You never edit `wiki/`, `raw/`, `state/` or `tools/`. All wiki changes are written as a plan JSON in
-`plans/pending/` and applied by a human with `tools/second_brain.py apply-plan`. A PreToolUse hook
+`plans/pending/` and applied with `tools/second_brain.py apply-plan` only after the human reviewed it: the human
+runs it, or tells you to and confirms the prompt (AGENTS.md §8). A PreToolUse hook
 (`.github/hooks/second-brain-guard.json`) denies anything else.

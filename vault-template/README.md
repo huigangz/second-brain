@@ -36,10 +36,13 @@ python tools/second_brain.py status
    - the flags `HUMAN-MAINTAINED PAGE`, `TEMPORAL OVERRIDE`, `HUMAN EDIT OVERRIDE`, `SYNTHETIC SOURCE`,
      `FUTURE DATE`;
    - for a partial reversal, whether the parts that still hold were split out onto an active page.
-4. To approve:
+4. To approve, run it yourself:
    ```powershell
    python tools/second_brain.py apply-plan plans/pending/<plan_id>.json --approve <PLAN SHA256>
    ```
+   or tell the agent to apply it (Claude Code / VS Code Copilot). The agent then asks for your confirmation in a
+   permission prompt: confirm only if the SHA256 in the prompt is the one of the render you reviewed.
+   `discover` works the same way: run it yourself, or ask the agent and confirm the prompt.
    To reject:
    ```powershell
    python tools/second_brain.py reject-plan plans/pending/<plan_id>.json --reason "…"
@@ -104,11 +107,14 @@ serve every agent. The guard is a PreToolUse hook; all four agents treat its exi
 
 - files can be written only to `plans/pending/*.json`;
 - shell commands must be read-only, or one of the 6 agent commands of `second_brain.py` (status, source,
-  trace, hash, validate-plan, render-plan).
+  trace, hash, validate-plan, render-plan);
+- `discover` and `apply-plan … --approve <sha256>` run on their own need your confirmation in a prompt, every time
+  (Claude Code, VS Code Copilot; `.claude/settings.json` also turns off bypass-permissions mode). In Codex and
+  Copilot CLI they stay refused: you run them.
 
 | Agent | Rules entry point | Ingest skill | Enforcement |
 |---|---|---|---|
-| Claude Code | `CLAUDE.md` → `@AGENTS.md` | `.claude/skills/second-brain-ingest` | `.claude/settings.json`: allow / deny permissions plus the guard hook |
+| Claude Code | `CLAUDE.md` → `@AGENTS.md` | `.claude/skills/second-brain-ingest` | `.claude/settings.json`: allow / ask / deny permissions plus the guard hook |
 | GitHub Copilot (VS Code agent, Copilot CLI) | `AGENTS.md` (`.vscode/settings.json` turns on `chat.useAgentsMdFile`) plus `.github/copilot-instructions.md` | `.agents/skills/…` (Copilot also reads `.claude/skills`, so it may show two identical skills with the same name) | `.github/hooks/second-brain-guard.json`; in VS Code the human-only commands always need confirmation |
 | Codex | `AGENTS.md` | `.agents/skills/second-brain-ingest` | `.codex/config.toml`: read-only sandbox, writing a plan needs your approval; `.codex/hooks.json`: the guard; `.codex/rules/`: human-only commands forbidden |
 
@@ -131,7 +137,8 @@ Notes:
 - These agent configurations follow each vendor's documentation. The first time you use an agent, run a quick
   smoke test:
   1. ask it to edit `wiki/index.md` directly: this must be refused;
-  2. ask it to run `apply-plan`: this must be refused;
+  2. ask it to run `apply-plan`: Claude Code / VS Code must show a confirmation prompt (decline it); Codex and
+     Copilot CLI must refuse;
   3. ask it to write `plans/pending/test.json`: this must be allowed (in Codex, it asks for your approval).
 
 ---
@@ -166,10 +173,12 @@ python tools/second_brain.py status
    - 有没有把讨论或猜测写成事实；
    - `HUMAN-MAINTAINED PAGE`、`TEMPORAL OVERRIDE`、`HUMAN EDIT OVERRIDE`、`SYNTHETIC SOURCE`、`FUTURE DATE` 这些 flag；
    - 部分推翻时，仍然有效的内容是否拆到了 active 页。
-4. 批准：
+4. 批准，自己运行：
    ```powershell
    python tools/second_brain.py apply-plan plans/pending/<plan_id>.json --approve <PLAN SHA256>
    ```
+   或者告诉 Agent 执行（Claude Code / VS Code Copilot）。Agent 执行前会弹出权限确认框：只有框中的 SHA256
+   与你审阅的 render 一致时才确认。`discover` 也一样：自己运行，或者让 Agent 运行并确认弹框。
    不批准：
    ```powershell
    python tools/second_brain.py reject-plan plans/pending/<plan_id>.json --reason "…"
@@ -222,11 +231,12 @@ Settings → Files and links → Excluded files：加入 `state/`、`plans/`、`
 guard 是一个 PreToolUse hook，四种 agent 都把它的 exit code 2 视为 "拒绝这次调用"：
 
 - 文件只能写到 `plans/pending/*.json`；
-- shell 命令只能是只读命令，或者 `second_brain.py` 的 6 个 agent 命令（status、source、trace、hash、validate-plan、render-plan）。
+- shell 命令只能是只读命令，或者 `second_brain.py` 的 6 个 agent 命令（status、source、trace、hash、validate-plan、render-plan）；
+- 单独运行的 `discover` 和 `apply-plan … --approve <sha256>` 每次都要你在弹框中确认（Claude Code、VS Code Copilot；`.claude/settings.json` 同时禁用了 bypass-permissions 模式）。在 Codex 和 Copilot CLI 中它们仍然被拒绝，由你运行。
 
 | Agent | 规则入口 | ingest skill | 强制执行 |
 |---|---|---|---|
-| Claude Code | `CLAUDE.md` → `@AGENTS.md` | `.claude/skills/second-brain-ingest` | `.claude/settings.json`：allow / deny 权限 + guard hook |
+| Claude Code | `CLAUDE.md` → `@AGENTS.md` | `.claude/skills/second-brain-ingest` | `.claude/settings.json`：allow / ask / deny 权限 + guard hook |
 | GitHub Copilot（VS Code agent、Copilot CLI） | `AGENTS.md`（`.vscode/settings.json` 开启 `chat.useAgentsMdFile`）+ `.github/copilot-instructions.md` | `.agents/skills/…`（Copilot 也读 `.claude/skills`，所以可能看到两份同名 skill，内容相同） | `.github/hooks/second-brain-guard.json`；VS Code 的人工专用命令始终需要确认 |
 | Codex | `AGENTS.md` | `.agents/skills/second-brain-ingest` | `.codex/config.toml`：只读 sandbox，写 plan 需要你批准；`.codex/hooks.json`：guard；`.codex/rules/`：禁止人工专用命令 |
 
@@ -240,5 +250,5 @@ guard 是一个 PreToolUse hook，四种 agent 都把它的 exit code 2 视为 "
 - 不论用哪个 agent，最后的保证都一样：plan 必须由你审阅并用 `--approve <sha256>` 执行。每次 session 结束后运行一次 `maintain`，可以发现有没有绕过 plan 直接改 wiki 的情况。
 - 这些 agent 配置是按各家官方文档写的，第一次使用某个 agent 时建议做一次冒烟测试：
   1. 让它直接编辑 `wiki/index.md`，应该被拒绝；
-  2. 让它运行 `apply-plan`，应该被拒绝；
+  2. 让它运行 `apply-plan`：Claude Code / VS Code 应该弹出确认框（选择拒绝）；Codex 和 Copilot CLI 应该直接拒绝；
   3. 让它写 `plans/pending/test.json`，应该被允许，或者在 Codex 中请求你批准。

@@ -35,7 +35,7 @@ gives agents written instructions only; this one adds enforcement around them.
 ```bash
 git clone https://github.com/huigangz/second-brain.git
 cd second-brain
-python -m unittest discover -s tests          # 154 tests
+python -m unittest discover -s tests          # 157 tests
 
 python tools/second_brain.py install ../my-vault   # creates the directory; it must not exist yet
 cd ../my-vault
@@ -79,8 +79,9 @@ A single PreToolUse guard, `tools/agent_guard.py`, serves all agents:
 
 - Files can be written only to `plans/pending/*.json`.
 - Shell commands must be read-only.
-- Of the tool's commands, the agent may run only `status`, `source`, `trace`, `hash`, `validate-plan` and
-  `render-plan`.
+- Of the tool's commands, the agent may run `status`, `source`, `trace`, `hash`, `validate-plan` and
+  `render-plan`; `discover` and `apply-plan` only with your confirmation in a permission prompt, every time
+  (Claude Code and VS Code; in Codex and Copilot CLI they stay human-only).
 
 | Agent | Enforcement |
 |---|---|

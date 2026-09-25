@@ -10,6 +10,13 @@ sys.path.insert(0, str(REPO / "tools"))
 import agent_guard as g  # noqa: E402
 
 VAULT = "C:/vault" if sys.platform == "win32" else "/vault"
+SHA = "0123456789abcdef" * 4
+
+
+def assertDenied(tc, result, msg=None):
+    """A deny, not an ask: Ask is also a non-empty string, so "not None" alone would not tell them apart."""
+    tc.assertIsNotNone(result, msg)
+    tc.assertNotIsInstance(result, g.Ask, msg)
 
 
 def claude(tool, **inp):
@@ -30,13 +37,13 @@ class TestWrites(unittest.TestCase):
         self.assertIsNone(g.decide(claude("Write", file_path="plans/pending/plan-20260924-a1b2.json")))
         for bad in ("wiki/entities/x.md", "state/pages.json", "raw/meetings/m.txt", "plans/applied/p.json",
                     "plans/pending/notes.md", "plans/pending/../../wiki/x.json", "AGENTS.md", "tools/second_brain.py"):
-            self.assertIsNotNone(g.decide(claude("Write", file_path=bad)), bad)
-            self.assertIsNotNone(g.decide(claude("Edit", file_path=bad, old_string="a", new_string="b")), bad)
+            assertDenied(self, g.decide(claude("Write", file_path=bad)), bad)
+            assertDenied(self, g.decide(claude("Edit", file_path=bad, old_string="a", new_string="b")), bad)
 
     def test_vscode_and_copilot_cli_edit_tools(self):
-        self.assertIsNotNone(g.decide(claude("replace_string_in_file", filePath=f"{VAULT}/wiki/index.md")))
+        assertDenied(self, g.decide(claude("replace_string_in_file", filePath=f"{VAULT}/wiki/index.md")))
         self.assertIsNone(g.decide(claude("create_file", filePath=f"{VAULT}/plans/pending/plan-20260924-x9y8.json")))
-        self.assertIsNotNone(g.decide(copilot_cli("edit", path="wiki/concepts/a.md")))
+        assertDenied(self, g.decide(copilot_cli("edit", path="wiki/concepts/a.md")))
         self.assertIsNone(g.decide(copilot_cli("create", path="plans/pending/plan-20260924-q1w2.json")))
 
     def test_codex_apply_patch(self):
@@ -44,11 +51,11 @@ class TestWrites(unittest.TestCase):
         bad = "*** Begin Patch\n*** Update File: wiki/entities/beacon.md\n@@\n-a\n+b\n*** End Patch"
         mixed = ok.replace("*** End Patch", "*** Delete File: state/pages.json\n*** End Patch")
         self.assertIsNone(g.decide(codex("apply_patch", command=["apply_patch", ok])))
-        self.assertIsNotNone(g.decide(codex("apply_patch", command=["apply_patch", bad])))
-        self.assertIsNotNone(g.decide(codex("apply_patch", patch=mixed)))
+        assertDenied(self, g.decide(codex("apply_patch", command=["apply_patch", bad])))
+        assertDenied(self, g.decide(codex("apply_patch", patch=mixed)))
 
     def test_write_without_target_is_denied(self):
-        self.assertIsNotNone(g.decide(claude("Write", content="x")))
+        assertDenied(self, g.decide(claude("Write", content="x")))
 
     def test_non_file_tools_pass(self):
         self.assertIsNone(g.decide(claude("TodoWrite", todos=[])))
@@ -65,11 +72,10 @@ class TestShell(unittest.TestCase):
             self.assertIsNone(g.decide(claude("Bash", command=cmd)), cmd)
         for cmd in ("python tools/second_brain.py apply-plan plans/pending/p.json --approve abc",
                     "python tools/second_brain.py rollback txn-1",
-                    "python tools/second_brain.py discover",
                     "python tools/second_brain.py --vault ../other status",
                     "python -c \"open('wiki/x.md','w').write('x')\"",
                     "python tools/other.py"):
-            self.assertIsNotNone(g.decide(claude("Bash", command=cmd)), cmd)
+            assertDenied(self, g.decide(claude("Bash", command=cmd)), cmd)
 
     def test_read_only_pipelines_allowed(self):
         for cmd in ("cat wiki/index.md | head -20", "rg -n \"Beacon\" wiki 2>/dev/null", "ls -la raw/meetings",
@@ -82,7 +88,7 @@ class TestShell(unittest.TestCase):
                     "sed -i 's/a/b/' wiki/x.md", "find wiki -delete", "Set-Content wiki/x.md 'a'",
                     "cat a | tee wiki/x.md", "ls; rm -rf state", "ls && python tools/second_brain.py apply-plan p",
                     "git commit -am x", "curl http://example.com", "echo $(rm x)"):
-            self.assertIsNotNone(g.decide(claude("Bash", command=cmd)), cmd)
+            assertDenied(self, g.decide(claude("Bash", command=cmd)), cmd)
 
     def test_review_bypasses_denied(self):
         """review 2026-09-23 P1: "read-only" commands that can still write files or run code."""
@@ -103,7 +109,7 @@ class TestShell(unittest.TestCase):
                     "python tools/second_brain.py --vault=C:/outside status",
                     # install / upgrade are human-only
                     "python tools/second_brain.py upgrade . --force", "python tools/second_brain.py install ../x"):
-            self.assertIsNotNone(g.decide(claude("Bash", command=cmd)), cmd)
+            assertDenied(self, g.decide(claude("Bash", command=cmd)), cmd)
         for cmd in ("rg -n \"def foo\\(\" tools", "sed -n '/^## Notes/,/^## /p' wiki/a.md", "sed -n '120,$p' x",
                     "Get-ChildItem wiki | Where-Object Name -like '*.md' | Select-Object -ExpandProperty Name",
                     "sort raw/a.md | uniq -c", "find wiki -name '*.md'"):
@@ -111,11 +117,47 @@ class TestShell(unittest.TestCase):
 
     def test_wrapped_commands(self):
         self.assertIsNone(g.decide(codex("Bash", command=["bash", "-lc", "cat wiki/index.md | head"])))
-        self.assertIsNotNone(g.decide(codex("Bash", command=["bash", "-lc", "echo x > wiki/a.md"])))
-        self.assertIsNotNone(g.decide(codex("Bash", command=[
+        assertDenied(self, g.decide(codex("Bash", command=["bash", "-lc", "echo x > wiki/a.md"])))
+        assertDenied(self, g.decide(codex("Bash", command=[
             "powershell", "-NoProfile", "-Command", "python tools/second_brain.py apply-plan p --approve x"])))
-        self.assertIsNotNone(g.decide(copilot_cli("powershell", command="Remove-Item wiki/x.md")))
+        assertDenied(self, g.decide(copilot_cli("powershell", command="Remove-Item wiki/x.md")))
         self.assertIsNone(g.decide(copilot_cli("bash", command="python tools/second_brain.py trace x")))
+
+
+class TestAskCommands(unittest.TestCase):
+    """discover / apply-plan: the agent may run them, but each run needs the human's confirmation."""
+
+    def test_standalone_forms_ask(self):
+        for cmd in ("python tools/second_brain.py discover",
+                    "python tools/second_brain.py discover --link raw/meetings/a.md meeting-undated-a",
+                    f"python tools/second_brain.py apply-plan plans/pending/plan-20260924-a1b2.json --approve {SHA}",
+                    f"py .\\tools\\second_brain.py apply-plan plans\\pending\\plan-20260924-a1b2.json --approve {SHA}"):
+            self.assertIsInstance(g.decide(claude("Bash", command=cmd)), g.Ask, cmd)
+        wrapped = codex("Bash", command=["powershell", "-Command", "python tools/second_brain.py discover"])
+        self.assertIsInstance(g.decide(wrapped), g.Ask)
+        self.assertIn(SHA[:12], g.decide(claude("Bash", command=f"python tools/second_brain.py apply-plan "
+                                                                  f"plans/pending/p.json --approve {SHA}")))
+
+    def test_anything_else_around_them_is_denied(self):
+        for cmd in ("python tools/second_brain.py discover; rm -rf wiki",
+                    "python tools/second_brain.py discover && python tools/second_brain.py maintain --fix",
+                    "python tools/second_brain.py discover > out.txt",
+                    f"python tools/second_brain.py apply-plan plans/pending/p.json --approve {SHA} | cat",
+                    "python tools/second_brain.py apply-plan plans/pending/p.json",                   # no approval
+                    "python tools/second_brain.py apply-plan plans/pending/p.json --approve abc",     # not a sha
+                    f"python tools/second_brain.py apply-plan plans/applied/p.json --approve {SHA}",  # not pending
+                    f"python tools/second_brain.py apply-plan plans/pending/p.json --approve {SHA} --allow-restructure",
+                    "python tools/second_brain.py discover --force",
+                    "python tools/second_brain.py --vault ../other discover",
+                    "python tools/second_brain.py discover --link 'raw/a.md;rm -rf wiki' x"):  # separator in quotes
+            assertDenied(self, g.decide(claude("Bash", command=cmd)), cmd)
+        # Copilot CLI: no confirmed support for "ask", so these stay human-only there
+        assertDenied(self, g.decide(copilot_cli("bash", command="python tools/second_brain.py discover")))
+
+    def test_other_human_only_commands_stay_denied(self):
+        for sub in ("rollback txn-1", "reject-plan plans/pending/p.json --reason x", "maintain --fix", "unlock --force",
+                    "upgrade . --force", "install ../x", "init", "rollback", "maintain", "unlock"):
+            assertDenied(self, g.decide(claude("Bash", command=f"python tools/second_brain.py {sub}")), sub)
 
 
 class TestHookProcess(unittest.TestCase):
@@ -131,6 +173,10 @@ class TestHookProcess(unittest.TestCase):
         denied = self.run_guard(claude("Write", file_path="wiki/x.md"))
         self.assertEqual(denied.returncode, 2)
         self.assertIn("plans/pending", denied.stderr)
+        asked = self.run_guard(claude("Bash", command="python tools/second_brain.py discover"))
+        self.assertEqual(asked.returncode, 0)
+        out = json.loads(asked.stdout)["hookSpecificOutput"]
+        self.assertEqual((out["hookEventName"], out["permissionDecision"]), ("PreToolUse", "ask"))
 
 
 if __name__ == "__main__":

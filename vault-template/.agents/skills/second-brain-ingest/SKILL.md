@@ -18,4 +18,5 @@ Hard limits (also enforced by a PreToolUse hook and by `tools/second_brain.py`):
 
 - Write only `plans/pending/<plan_id>.json`. Never edit `wiki/`, `raw/`, `state/`, `tools/`.
 - Run only `python tools/second_brain.py status|source|trace|hash|validate-plan|render-plan`, one per call, no pipes.
-- Never run `apply-plan`; the human applies after reviewing the render.
+- `discover` and `apply-plan` only with the user's consent for that run (AGENTS.md §8): `apply-plan` only after the
+  user reviewed the render and told you to apply it, with that PLAN SHA256. The user also confirms a prompt.

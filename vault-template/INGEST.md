@@ -1,6 +1,6 @@
 # Ingest Procedure
 
-> rules-version: stage1-v0.4 (English translation of stage1-v0.3) · applies with [AGENTS.md](AGENTS.md) (how to
+> rules-version: stage1-v0.5 · applies with [AGENTS.md](AGENTS.md) (how to
 > write: AGENTS.md §8 and PLAN-SCHEMA.md)
 
 The user says "ingest <source_id>" or "ingest raw/<path>". First run `status` and `source <id>`: work only on a
@@ -37,7 +37,7 @@ files, do not take them on along the way.
    - no superseded page still holds content that is still valid in its body (check each component of the old
      decision one by one, AGENTS.md §3 rule 3);
    - every link has the form `[[page_id|title]]`.
-10. **Final report** to the user (do **not** apply the plan):
+10. **Final report** to the user (do **not** apply the plan yet):
     - the plan file path, and the PLAN SHA256 from the first line of the `render-plan` output
     - which operations you used; if an operation's limits kept a change from being expressed the ideal way, say
       what the ideal would have been and what you did instead
@@ -50,4 +50,6 @@ files, do not take them on along the way.
 
 In pilot mode, **do not wait for the user to confirm the takeaways before writing the plan**: write the plan,
 validate and render it, then report. That is how the agent's own judgement can be evaluated.
-After the plan is approved and applied, the user will tell you; get fresh hashes for the next source after that.
+The user reviews the render and then either applies the plan or tells you to apply it. Apply it yourself only on
+that explicit instruction, with the reviewed PLAN SHA256 (AGENTS.md §8, "Commands that need the user's consent").
+Once it is applied, get fresh hashes for the next source.
